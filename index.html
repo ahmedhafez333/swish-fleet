@@ -1618,6 +1618,8 @@ function Vehicles({vehicles,setVehicles,currentUser}) {
   const [form,setForm]=useState(EV);
   const [editId,setEditId]=useState(null);
   const [q,setQ]=useState('');
+  const [fVStatus,setFVStatus]=useState('');
+  const [fVType,setFVType]=useState('');
   const [showImport,setShowImport]=useState(false);
   const set=f=>val=>setForm(p=>({...p,[f]:val}));
   // Transportation Manager can only create Bus, Car, or Van
@@ -1631,7 +1633,13 @@ function Vehicles({vehicles,setVehicles,currentUser}) {
   const hasSeats=form.type==='car'||form.type==='bus';
   const cc=calcCBM(form.chilled_l,form.chilled_w,form.chilled_h);
   const fc=calcCBM(form.frozen_l,form.frozen_w,form.frozen_h);
-  const filtered=vehicles.filter(v=>(v.plate+v.make+v.model).toLowerCase().includes(q.toLowerCase()));
+  const hasVFilter=fVStatus||fVType||q;
+  const filtered=vehicles.filter(v=>{
+    if(fVStatus&&v.status!==fVStatus) return false;
+    if(fVType&&v.type!==fVType) return false;
+    if(q&&!(v.plate+v.make+v.model+' '+(v.vin||'')).toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
   function openEdit(v){setForm({...EV,...v});setEditId(v.id);setShow(true);}
   function saveV(){
     const isNew=!editId;
@@ -1740,7 +1748,12 @@ function Vehicles({vehicles,setVehicles,currentUser}) {
           </div>
         );
       })()}
-      <div style={{marginBottom:12}}><input placeholder={'🔍 '+t('searchVehicles')} value={q} onChange={e=>setQ(e.target.value)} style={{maxWidth:300}}/></div>
+      <div className="filter-bar">
+        <div className="fb-field"><label>{lang==='ar'?'الحالة':'Status'}</label><select value={fVStatus} onChange={e=>setFVStatus(e.target.value)} style={{minWidth:140}}><option value="">{lang==='ar'?'جميع الحالات':'All Statuses'}</option><option value="active">🟢 {t('active')}</option><option value="inactive">🔴 {t('inactive')}</option><option value="maintenance">🔧 {t('maintenance')}</option></select></div>
+        <div className="fb-field"><label>{lang==='ar'?'النوع':'Type'}</label><select value={fVType} onChange={e=>setFVType(e.target.value)} style={{minWidth:140}}><option value="">{lang==='ar'?'جميع الأنواع':'All Types'}</option>{allowedVehTypes.map(vt=><option key={vt.v} value={vt.v}>{vt.l}</option>)}</select></div>
+        <div className="fb-field" style={{flex:1}}><label>{lang==='ar'?'بحث':'Search'}</label><input placeholder={'🔍 '+t('searchVehicles')} value={q} onChange={e=>setQ(e.target.value)}/></div>
+        {hasVFilter&&<button className="filter-reset" onClick={()=>{setFVStatus('');setFVType('');setQ('');}}>✕ {t('reset')}</button>}
+      </div>
       <div className="card overflow-hidden">
         {filtered.length?(
           <table>
@@ -1847,6 +1860,10 @@ function Drivers({drivers,setDrivers,vehicles,currentUser}) {
   const [editId,setEditId]=useState(null);
   const [showImport,setShowImport]=useState(false);
   const [showVehPicker,setShowVehPicker]=useState(false);
+  const [fDrvStatus,setFDrvStatus]=useState('');
+  const [fDrvVeh,setFDrvVeh]=useState('');
+  const [fDrvLic,setFDrvLic]=useState('');
+  const [qDrv,setQDrv]=useState('');
   const set=f=>val=>setForm(p=>({...p,[f]:val}));
   function openEdit(d){
     // migrate legacy single vehicle_id to vehicle_ids array
@@ -1960,11 +1977,29 @@ function Drivers({drivers,setDrivers,vehicles,currentUser}) {
           </div>
         );
       })()}
+      {(()=>{
+        const hasDrvFilter=fDrvStatus||fDrvVeh||fDrvLic||qDrv;
+        const filteredDrivers=drivers.filter(d=>{
+          if(fDrvStatus&&d.status!==fDrvStatus) return false;
+          if(fDrvVeh&&!drvVehicleIds(d).includes(fDrvVeh)) return false;
+          if(fDrvLic==='expiring'){const dl=daysLeft(d.license_expiry);if(!(dl!==null&&dl>=0&&dl<=30))return false;}
+          if(fDrvLic==='expired'){const dl=daysLeft(d.license_expiry);if(!(dl!==null&&dl<0))return false;}
+          if(qDrv&&!(d.name+' '+(d.license||'')+' '+(d.phone||'')).toLowerCase().includes(qDrv.toLowerCase())) return false;
+          return true;
+        });
+        return (
+      <><div className="filter-bar">
+        <div className="fb-field"><label>{lang==='ar'?'الحالة':'Status'}</label><select value={fDrvStatus} onChange={e=>setFDrvStatus(e.target.value)} style={{minWidth:140}}><option value="">{lang==='ar'?'جميع الحالات':'All Statuses'}</option><option value="active">🟢 {t('active')}</option><option value="on_leave">🟡 {lang==='ar'?'في إجازة':'On Leave'}</option><option value="inactive">🔴 {t('inactive')}</option></select></div>
+        <div className="fb-field"><label>{lang==='ar'?'المركبة':'Vehicle'}</label><select value={fDrvVeh} onChange={e=>setFDrvVeh(e.target.value)} style={{minWidth:150}}><option value="">{lang==='ar'?'كل المركبات':'All Vehicles'}</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make}</option>)}</select></div>
+        <div className="fb-field"><label>{lang==='ar'?'حالة الرخصة':'License'}</label><select value={fDrvLic} onChange={e=>setFDrvLic(e.target.value)} style={{minWidth:150}}><option value="">{lang==='ar'?'جميع الحالات':'All'}</option><option value="expiring">⚠️ {lang==='ar'?'تنتهي ≤30 يوم':'Expiring ≤30d'}</option><option value="expired">🔴 {lang==='ar'?'منتهية':'Expired'}</option></select></div>
+        <div className="fb-field" style={{flex:1}}><label>{lang==='ar'?'بحث':'Search'}</label><input placeholder={'🔍 '+t('searchDrivers')} value={qDrv} onChange={e=>setQDrv(e.target.value)}/></div>
+        {hasDrvFilter&&<button className="filter-reset" onClick={()=>{setFDrvStatus('');setFDrvVeh('');setFDrvLic('');setQDrv('');}}>✕ {t('reset')}</button>}
+      </div>
       <div className="card overflow-hidden">
-        {drivers.length?(
+        {filteredDrivers.length?(
           <table>
             <thead><tr><th>{t('driverName')}</th><th>{t('licenseNo2')}</th><th>{lang==='ar'?'تاريخ الانتهاء':'Expiry'}</th><th>{t('phone2')}</th><th>{t('assignedVeh')}</th><th>{t('status')}</th><th></th></tr></thead>
-            <tbody>{drivers.map(d=>{
+            <tbody>{filteredDrivers.map(d=>{
               const vids=drvVehicleIds(d);
               const vehs=vids.map(id=>vehicles.find(x=>x.id===id)).filter(Boolean);
               const xd=daysLeft(d.license_expiry);
@@ -1990,8 +2025,8 @@ function Drivers({drivers,setDrivers,vehicles,currentUser}) {
               );
             })}</tbody>
           </table>
-        ):<div className="empty"><div className="ei">👤</div><div style={{fontWeight:600,marginBottom:4}}>No drivers registered</div><div style={{fontSize:13}}>Click "+ Add Driver" to get started</div></div>}
-      </div>
+        ):<div className="empty"><div className="ei">👤</div><div style={{fontWeight:600,marginBottom:4}}>{hasDrvFilter?'No matches':'No drivers registered'}</div><div style={{fontSize:13}}>{hasDrvFilter?'Try adjusting filters':'Click "+ Add Driver" to get started'}</div></div>}
+      </div></>);})()}
       {show&&(
         <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShow(false)}>
           <div className="modal p-6">
@@ -2059,6 +2094,7 @@ function Maintenance({maintenance,setMaintenance,vehicles,currentUser}) {
   const [fStype,setFStype]=useState('');
   const [fFrom,setFFrom]=useState('');
   const [fTo,setFTo]=useState('');
+  const [fUrgency,setFUrgency]=useState('');
   const set=f=>val=>setForm(p=>({...p,[f]:val}));
   const [maintErr,setMaintErr]=useState('');
   function openEdit(m){setForm({...EM,...m});setEditId(m.id);setMaintErr('');setShow(true);}
@@ -2134,11 +2170,17 @@ function Maintenance({maintenance,setMaintenance,vehicles,currentUser}) {
   function setIntKm(v){setForm(f=>({...f,interval_km:v,next_due_km:f.last_service_km&&v?String(parseInt(f.last_service_km)+parseInt(v)):f.next_due_km}));}
   function setLastHrs(v){setForm(f=>({...f,last_service_hours:v,next_due_hours:v&&f.interval_hours?String(parseInt(v)+parseInt(f.interval_hours)):f.next_due_hours}));}
   function setIntHrs(v){setForm(f=>({...f,interval_hours:v,next_due_hours:f.last_service_hours&&v?String(parseInt(f.last_service_hours)+parseInt(v)):f.next_due_hours}));}
-  const hasFilter=fVeh||fStype||fFrom||fTo;
+  const hasFilter=fVeh||fStype||fFrom||fTo||fUrgency;
   const filtered=maintenance.filter(m=>{
     if(m.status==='completed') return false; // completed records go to Reports history
     if(fVeh&&m.vehicle_id!==fVeh) return false;
     if(fStype&&m.service_type!==fStype) return false;
+    if(fUrgency){
+      const dl=daysLeft(m.next_due_date);
+      if(fUrgency==='overdue'&&!(dl!==null&&dl<0)) return false;
+      if(fUrgency==='due_soon'&&!(dl!==null&&dl>=0&&dl<=30)) return false;
+      if(fUrgency==='ok'&&!(dl===null||dl>30)) return false;
+    }
     const hasDateFilter=fFrom||fTo;
     const d=hasDateFilter?(m.next_due_date||''):(m.last_service_date||m.next_due_date||'');
     if(fFrom&&d&&d<fFrom) return false;
@@ -2157,11 +2199,12 @@ function Maintenance({maintenance,setMaintenance,vehicles,currentUser}) {
         <button className="btn btn-blue" onClick={()=>{setForm(EM);setEditId(null);setShow(true);}}>＋ {t('addMaintBtn')}</button>
       </div>
       <div className="filter-bar">
-        <div className="fb-field"><label>{t('vehicle')}</label><select value={fVeh} onChange={e=>setFVeh(e.target.value)} style={{minWidth:160}}><option value="">{lang==='ar'?'كل المركبات':'All Vehicles'}</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make}</option>)}</select></div>
+        <div className="fb-field"><label>{t('vehicle')}</label><select value={fVeh} onChange={e=>setFVeh(e.target.value)} style={{minWidth:150}}><option value="">{lang==='ar'?'كل المركبات':'All Vehicles'}</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make}</option>)}</select></div>
         <div className="fb-field"><label>{t('serviceType2')}</label><select value={fStype} onChange={e=>setFStype(e.target.value)} style={{minWidth:150}}><option value="">{lang==='ar'?'كل الأنواع':'All Types'}</option>{SVC_TYPES.map(s=><option key={s} value={s}>{s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>)}</select></div>
-        <div className="fb-field"><label>{t('date')} {lang==='ar'?'من':'From'}</label><input type="date" value={fFrom} onChange={e=>setFFrom(e.target.value)}/></div>
-        <div className="fb-field"><label>{t('date')} {lang==='ar'?'إلى':'To'}</label><input type="date" value={fTo} onChange={e=>setFTo(e.target.value)}/></div>
-        {hasFilter&&<button className="filter-reset" onClick={()=>{setFVeh('');setFStype('');setFFrom('');setFTo('');}}>✕ {t('reset')}</button>}
+        <div className="fb-field"><label>{lang==='ar'?'الاستعجال':'Urgency'}</label><select value={fUrgency} onChange={e=>setFUrgency(e.target.value)} style={{minWidth:140}}><option value="">{lang==='ar'?'الكل':'All'}</option><option value="overdue">🔴 {lang==='ar'?'متأخر':'Overdue'}</option><option value="due_soon">🟡 {lang==='ar'?'قريباً ≤30':'Due ≤30d'}</option><option value="ok">🟢 {lang==='ar'?'بخير':'OK (&gt;30d)'}</option></select></div>
+        <div className="fb-field"><label>{lang==='ar'?'تاريخ الاستحقاق من':'Due Date From'}</label><input type="date" value={fFrom} onChange={e=>setFFrom(e.target.value)}/></div>
+        <div className="fb-field"><label>{lang==='ar'?'تاريخ الاستحقاق إلى':'Due Date To'}</label><input type="date" value={fTo} onChange={e=>setFTo(e.target.value)}/></div>
+        {hasFilter&&<button className="filter-reset" onClick={()=>{setFVeh('');setFStype('');setFFrom('');setFTo('');setFUrgency('');}}>✕ {t('reset')}</button>}
       </div>
       {(()=>{
         const allM=maintenance.filter(m=>!fVeh||m.vehicle_id===fVeh);
@@ -2380,6 +2423,9 @@ function WorkOrders({workorders,setWorkorders,vehicles,currentUser}) {
   const [fAssigned,setFAssigned]=useState('');
   const [fFrom,setFFrom]=useState('');
   const [fTo,setFTo]=useState('');
+  const [fPriority,setFPriority]=useState('');
+  const [fStatus,setFStatus]=useState('');
+  const [showHistory,setShowHistory]=useState(false);
   const fileRef=useRef();
   const set=f=>val=>setForm(p=>({...p,[f]:val}));
   function openEdit(w){setForm({...EW,...w});setEditId(w.id);setImgPrev(w.image||'');setWOErr('');setShow(true);}
@@ -2399,46 +2445,61 @@ function WorkOrders({workorders,setWorkorders,vehicles,currentUser}) {
     setImgLoading(false);
   }
   const assignees=[...new Set(workorders.map(w=>w.assigned_to).filter(Boolean))];
-  const hasFilter=fVeh||fAssigned||fFrom||fTo;
-  const filtered=workorders.filter(w=>{
+  const hasFilter=fVeh||fAssigned||fFrom||fTo||fPriority||fStatus;
+  function applyBaseFilters(w){
     if(fVeh&&w.vehicle_id!==fVeh) return false;
     if(fAssigned&&w.assigned_to!==fAssigned) return false;
     const d=w.date||(w.created_at||'').slice(0,10);
     if(fFrom&&d&&d<fFrom) return false;
     if(fTo&&d&&d>fTo) return false;
     return true;
+  }
+  const filtered=workorders.filter(w=>{
+    if(w.status==='closed') return false;
+    if(!applyBaseFilters(w)) return false;
+    if(fPriority&&w.priority!==fPriority) return false;
+    if(fStatus&&w.status!==fStatus) return false;
+    return true;
   });
+  const closedWOs=workorders.filter(w=>w.status==='closed'&&applyBaseFilters(w));
   const totalCost=filtered.reduce((s,w)=>s+Number(w.cost||0),0);
-  const allCost=workorders.reduce((s,w)=>s+Number(w.cost||0),0);
+  const allActiveCost=workorders.filter(w=>w.status!=='closed').reduce((s,w)=>s+Number(w.cost||0),0);
   return (
     <div className="p-6">
       <div className="ph">
         <div className="ph-left">
           <div className="ph-icon" style={{background:'linear-gradient(135deg,#8b5cf622,#7c3aed22)'}}><span>📋</span></div>
-          <div><h1 style={{fontSize:22,fontWeight:800,margin:0,color:'#0f172a'}}>{t('workorders')}</h1><p style={{color:'#64748b',fontSize:13,margin:0}}>{filtered.length} / {workorders.length} {lang==='ar'?'أوامر':'orders'}</p></div>
+          <div><h1 style={{fontSize:22,fontWeight:800,margin:0,color:'#0f172a'}}>{t('workorders')}</h1><p style={{color:'#64748b',fontSize:13,margin:0}}>{filtered.length} {lang==='ar'?'نشط':'active'} · <span style={{color:'#64748b'}}>{workorders.filter(w=>w.status==='closed').length} {lang==='ar'?'مغلق':'closed'}</span></p></div>
         </div>
         <button className="btn btn-blue" onClick={()=>{setForm(EW);setEditId(null);setImgPrev('');setShow(true);}}>＋ {t('addWOBtn')}</button>
       </div>
       <div className="filter-bar">
-        <div className="fb-field"><label>{t('vehicle')}</label><select value={fVeh} onChange={e=>setFVeh(e.target.value)} style={{minWidth:160}}><option value="">{lang==='ar'?'كل المركبات':'All Vehicles'}</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make}</option>)}</select></div>
-        <div className="fb-field"><label>{t('woAssigned')}</label><select value={fAssigned} onChange={e=>setFAssigned(e.target.value)} style={{minWidth:150}}><option value="">{lang==='ar'?'الكل':'All Assignees'}</option>{assignees.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
+        <div className="fb-field"><label>{t('vehicle')}</label><select value={fVeh} onChange={e=>setFVeh(e.target.value)} style={{minWidth:150}}><option value="">{lang==='ar'?'كل المركبات':'All Vehicles'}</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make}</option>)}</select></div>
+        <div className="fb-field"><label>{lang==='ar'?'الحالة':'Status'}</label><select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{minWidth:130}}><option value="">{lang==='ar'?'جميع النشطة':'All Active'}</option><option value="open">📂 {t('open')}</option><option value="in_progress">⚙️ {t('inProgress')}</option><option value="resolved">✅ {t('resolved')}</option></select></div>
+        <div className="fb-field"><label>{lang==='ar'?'الأولوية':'Priority'}</label><select value={fPriority} onChange={e=>setFPriority(e.target.value)} style={{minWidth:120}}><option value="">{lang==='ar'?'كل الأولويات':'All Priorities'}</option><option value="low">🟢 Low</option><option value="medium">🟡 Medium</option><option value="high">🟠 High</option><option value="critical">🔴 Critical</option></select></div>
+        <div className="fb-field"><label>{t('woAssigned')}</label><select value={fAssigned} onChange={e=>setFAssigned(e.target.value)} style={{minWidth:140}}><option value="">{lang==='ar'?'الكل':'All Assignees'}</option>{assignees.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
         <div className="fb-field"><label>{t('date')} {lang==='ar'?'من':'From'}</label><input type="date" value={fFrom} onChange={e=>setFFrom(e.target.value)}/></div>
         <div className="fb-field"><label>{t('date')} {lang==='ar'?'إلى':'To'}</label><input type="date" value={fTo} onChange={e=>setFTo(e.target.value)}/></div>
-        {hasFilter&&<button className="filter-reset" onClick={()=>{setFVeh('');setFAssigned('');setFFrom('');setFTo('');}}>✕ {t('reset')}</button>}
+        {hasFilter&&<button className="filter-reset" onClick={()=>{setFVeh('');setFAssigned('');setFFrom('');setFTo('');setFPriority('');setFStatus('');}}>✕ {t('reset')}</button>}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
-        {[['open','📂','#3b82f6'],['in_progress','⚙️','#8b5cf6'],['resolved','✅','#10b981'],['closed','🔒','#64748b']].map(([s,ic,c])=>(
+        {[['open','📂','#3b82f6'],['in_progress','⚙️','#8b5cf6'],['resolved','✅','#10b981']].map(([s,ic,c])=>(
           <div key={s} className="scard" style={{textAlign:'center',padding:'24px 14px'}}>
             <div style={{fontSize:38,marginBottom:10}}>{ic}</div>
-            <div style={{fontSize:30,fontWeight:800,color:c}}>{filtered.filter(w=>w.status===s).length}</div>
-            <div style={{fontSize:12,color:'#64748b',textTransform:'capitalize',marginTop:3,fontWeight:600}}>{s==='open'?t('open'):s==='in_progress'?t('inProgress'):s==='resolved'?t('resolved'):t('closed')}</div>
+            <div style={{fontSize:30,fontWeight:800,color:c}}>{workorders.filter(w=>w.status===s).length}</div>
+            <div style={{fontSize:12,color:'#64748b',textTransform:'capitalize',marginTop:3,fontWeight:600}}>{s==='open'?t('open'):s==='in_progress'?t('inProgress'):t('resolved')}</div>
           </div>
         ))}
+        <div className="scard" style={{textAlign:'center',padding:'24px 14px',background:'linear-gradient(135deg,#f8fafc,#f1f5f9)',cursor:'pointer',border:showHistory?'2px solid #64748b':'2px solid transparent'}} onClick={()=>setShowHistory(p=>!p)}>
+          <div style={{fontSize:38,marginBottom:10}}>📜</div>
+          <div style={{fontSize:30,fontWeight:800,color:'#64748b'}}>{workorders.filter(w=>w.status==='closed').length}</div>
+          <div style={{fontSize:12,color:'#64748b',marginTop:3,fontWeight:600}}>{lang==='ar'?'المغلقة — السجل':'Closed — History'}</div>
+        </div>
         <div className="scard" style={{textAlign:'center',padding:'24px 14px',background:'linear-gradient(135deg,#eff6ff,#dbeafe)'}}>
           <div style={{fontSize:38,marginBottom:10}}>💰</div>
           <div style={{fontSize:19,fontWeight:800,color:'#1d4ed8',lineHeight:1.2}}>{fmtKWD(totalCost)}</div>
           <div style={{fontSize:12,color:'#3b82f6',marginTop:4,fontWeight:600}}>{hasFilter?(lang==='ar'?'مصفى':'Filtered'):(lang==='ar'?'الإجمالي':'Total')} {t('cost')}</div>
-          {hasFilter&&<div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{lang==='ar'?'الكل:':'All:'} {fmtKWD(allCost)}</div>}
+          {hasFilter&&<div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{lang==='ar'?'الكل:':'All:'} {fmtKWD(allActiveCost)}</div>}
         </div>
       </div>
       <div className="card overflow-hidden">
@@ -2463,7 +2524,40 @@ function WorkOrders({workorders,setWorkorders,vehicles,currentUser}) {
               );
             })}</tbody>
           </table>
-        ):<div className="empty"><div className="ei">📋</div><div style={{fontWeight:600,marginBottom:4}}>{hasFilter?'No matches':'No work orders yet'}</div><div style={{fontSize:13}}>{hasFilter?'Try adjusting filters':'Create a work order to track repairs'}</div></div>}
+        ):<div className="empty"><div className="ei">📋</div><div style={{fontWeight:600,marginBottom:4}}>{hasFilter?'No matches':'No active work orders'}</div><div style={{fontSize:13}}>{hasFilter?'Try adjusting filters':'Create a work order to track repairs'}</div></div>}
+      </div>
+      {/* ── Closed History Section ── */}
+      <div style={{marginTop:20}}>
+        <div onClick={()=>setShowHistory(p=>!p)} style={{display:'flex',alignItems:'center',gap:10,padding:'11px 16px',background:showHistory?'#f1f5f9':'#f8fafc',borderRadius:12,border:'1px solid #e2e8f0',cursor:'pointer',marginBottom:showHistory?12:0,userSelect:'none'}}>
+          <span style={{fontSize:18}}>📜</span>
+          <span style={{fontWeight:700,fontSize:15,color:'#374151'}}>{lang==='ar'?'السجل — الأوامر المغلقة':'History — Closed Work Orders'}</span>
+          {workorders.filter(w=>w.status==='closed').length>0&&<span style={{background:'#64748b',color:'#fff',borderRadius:999,fontSize:11,padding:'2px 8px',fontWeight:800,marginLeft:2}}>{closedWOs.length}{hasFilter&&closedWOs.length!==workorders.filter(w=>w.status==='closed').length?' (filtered)':''}</span>}
+          <span style={{marginLeft:'auto',color:'#94a3b8',fontSize:13,fontWeight:600}}>{showHistory?(lang==='ar'?'إخفاء ▲':'Hide ▲'):(lang==='ar'?'عرض ▼':'Show ▼')}</span>
+        </div>
+        {showHistory&&(
+          <div className="card overflow-hidden">
+            {closedWOs.length?(
+              <table>
+                <thead><tr><th>{t('vehicle')}</th><th>{t('woTitle')}</th><th>{t('woPriority')}</th><th>{t('woAssigned')}</th><th>{t('woCost')}</th><th>{t('date')}</th><th>{lang==='ar'?'الحل':'Resolution'}</th><th></th></tr></thead>
+                <tbody>{closedWOs.slice().reverse().map(w=>{
+                  const veh=vehicles.find(x=>x.id===w.vehicle_id);
+                  return (
+                    <tr key={w.id} style={{opacity:0.82}}>
+                      <td style={{fontFamily:'monospace',fontWeight:700,color:'#64748b'}}>{veh?veh.plate:'—'}</td>
+                      <td><div style={{fontWeight:600,color:'#374151'}}>{w.title}</div>{w.description&&<div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{w.description.slice(0,60)}{w.description.length>60?'…':''}</div>}</td>
+                      <td><Badge v={w.priority}/></td>
+                      <td>{w.assigned_to||'—'}</td>
+                      <td style={{fontWeight:600}}>{w.cost?fmtKWD(w.cost):'—'}</td>
+                      <td style={{color:'#94a3b8'}}>{w.date||(w.created_at||'').slice(0,10)}</td>
+                      <td style={{fontSize:12,color:'#475569',maxWidth:180}}>{w.resolution||<span style={{color:'#cbd5e1'}}>—</span>}</td>
+                      <td><button className="btn btn-gray" style={{padding:'5px 10px',fontSize:12}} onClick={()=>openEdit(w)}>✏️</button></td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            ):<div className="empty" style={{padding:24}}><div className="ei">📜</div><div style={{fontWeight:600}}>{lang==='ar'?'لا توجد أوامر مغلقة':'No closed work orders yet'}</div></div>}
+          </div>
+        )}
       </div>
       {show&&(
         <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShow(false)}>
@@ -2514,6 +2608,7 @@ function FuelPage({fuel,setFuel,vehicles,currentUser}) {
   const [filterV,setFilterV]=useState('');
   const [fFrom,setFFrom]=useState('');
   const [fTo,setFTo]=useState('');
+  const [fFuelType,setFFuelType]=useState('');
   const [showImport,setShowImport]=useState(false);
   const set=f=>val=>setForm(p=>({...p,[f]:val}));
   function recalc(f){
@@ -2565,8 +2660,9 @@ function FuelPage({fuel,setFuel,vehicles,currentUser}) {
     reader.readAsText(file);
     e.target.value='';
   }
-  const hasFilter=filterV||fFrom||fTo;
+  const hasFilter=filterV||fFrom||fTo||fFuelType;
   const filtered=(filterV?fuel.filter(f=>f.vehicle_id===filterV):fuel).filter(f=>{
+    if(fFuelType&&f.fuel_type!==fFuelType) return false;
     const d=f.start_date||f.end_date||'';
     if(fFrom&&d&&d<fFrom) return false;
     if(fTo&&d&&d>fTo) return false;
@@ -2641,10 +2737,11 @@ function FuelPage({fuel,setFuel,vehicles,currentUser}) {
         );
       })()}
       <div className="filter-bar">
-        <div className="fb-field"><label>{t('vehicle')}</label><select value={filterV} onChange={e=>setFilterV(e.target.value)} style={{minWidth:170}}><option value="">{lang==='ar'?'كل المركبات':'All Vehicles'}</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make}</option>)}</select></div>
+        <div className="fb-field"><label>{t('vehicle')}</label><select value={filterV} onChange={e=>setFilterV(e.target.value)} style={{minWidth:160}}><option value="">{lang==='ar'?'كل المركبات':'All Vehicles'}</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.make}</option>)}</select></div>
+        <div className="fb-field"><label>{lang==='ar'?'نوع الوقود':'Fuel Type'}</label><select value={fFuelType} onChange={e=>setFFuelType(e.target.value)} style={{minWidth:130}}><option value="">{lang==='ar'?'جميع الأنواع':'All Types'}</option><option value="diesel">⛽ Diesel</option><option value="petrol">🛢️ Petrol</option><option value="electric">⚡ Electric</option><option value="hybrid">🔋 Hybrid</option></select></div>
         <div className="fb-field"><label>{t('date')} {lang==='ar'?'من':'From'}</label><input type="date" value={fFrom} onChange={e=>setFFrom(e.target.value)}/></div>
         <div className="fb-field"><label>{t('date')} {lang==='ar'?'إلى':'To'}</label><input type="date" value={fTo} onChange={e=>setFTo(e.target.value)}/></div>
-        {hasFilter&&<button className="filter-reset" onClick={()=>{setFilterV('');setFFrom('');setFTo('');}}>✕ {t('reset')}</button>}
+        {hasFilter&&<button className="filter-reset" onClick={()=>{setFilterV('');setFFrom('');setFTo('');setFFuelType('');}}>✕ {t('reset')}</button>}
       </div>
       <div className="card overflow-hidden">
         {filtered.length?(
